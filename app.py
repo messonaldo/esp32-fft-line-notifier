@@ -37,7 +37,7 @@ def webhook():
         main_freq = freq[idx]
         main_amp = amplitude[idx]
 
-        message = f"📊 主頻率：{main_freq:.2f} Hz\n🔊 振幅：{main_amp:.2f}"
+        message = f"主頻率：{main_freq:.2f} Hz\n, 振幅：{main_amp:.2f}"
         logging.info(f"送出訊息: {message}")
         send_line_notify(message)
 
