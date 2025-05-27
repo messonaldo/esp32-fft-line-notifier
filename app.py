@@ -1,33 +1,19 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import logging
 
-# 建立 Flask App
 app = Flask(__name__)
 
-# 設定 logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# 設定 Logging，顯示級別與格式
+logging.basicConfig(level=logging.INFO, format="🔍 %(asctime)s - %(message)s")
 
-@app.route('/', methods=['POST'])
-def receive_data():
-    try:
-        data = request.get_json()
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
+    az = data.get('az')
 
-        # 從 JSON 中取得 az 值
-        az = data.get('az')
+    if az is not None:
+        logging.info(f"接收到 az 資料：{az}")
+    else:
+        logging.warning("⚠️ 未收到有效的 az 資料")
 
-        if az is not None:
-            logging.info(f"📡 接收到 az: {az}")
-        else:
-            logging.warning("⚠️ 沒有收到 az 值")
-
-        return "OK", 200
-
-    except Exception as e:
-        logging.error(f"❌ 資料處理錯誤: {e}")
-        return "Error", 500
-
-# 測試首頁
-@app.route('/', methods=['GET'])
-def home():
-    return "🔧 Render Server 正常運作中！"
-
+    return jsonify({"status": "received"}), 200
