@@ -2,47 +2,40 @@ from flask import Flask, request, jsonify
 import logging
 import threading
 import time
+import os
 
 app = Flask(__name__)
-
-# 設定 logging 格式與等級
 logging.basicConfig(level=logging.INFO, format='🔍 %(asctime)s - %(message)s')
 
-# 是否接收到 az 的旗標
 az_received_flag = {'received': False}
 
-# 背景 Thread：每秒檢查是否接收到 az，否則印出 Empty
 def print_empty_when_idle():
     while True:
         time.sleep(1)
         if not az_received_flag['received']:
             logging.info("Empty")
         else:
-            az_received_flag['received'] = False  # 重設旗標
+            az_received_flag['received'] = False
 
-# 啟動背景執行緒
 threading.Thread(target=print_empty_when_idle, daemon=True).start()
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
-        # 印出原始 payload，方便 debug
+        data = request.get_json(force=True)
+        az = data.get('az')
         logging.info(f"原始資料：{request.data}")
 
-        # 檢查 Content-Type 並強制解析 JSON
-        if request.is_json:
-            data = request.get_json(force=True)
-            az = data.get('az')
-
-            if az is not None:
-                az_received_flag['received'] = True
-                logging.info(f"接收到 az 資料：{az}")
-            else:
-                logging.warning("⚠️ POST 中未包含 az 資料")
+        if az is not None:
+            az_received_flag['received'] = True
+            logging.info(f"接收到 az 資料：{az}")
         else:
-            logging.warning(f"⚠️ Content-Type 不是 JSON：{request.content_type}")
-
+            logging.warning("⚠️ POST 中未包含 az 資料")
     except Exception as e:
         logging.error(f"❌ 發生錯誤：{e}")
 
     return jsonify({"status": "received"}), 200
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))  # 🟢 關鍵：使用 Render 指定的 port
+    app.run(host='0.0.0.0', port=port)
