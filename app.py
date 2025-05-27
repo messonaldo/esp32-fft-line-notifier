@@ -1,57 +1,74 @@
 from flask import Flask, request, jsonify
 import numpy as np
+import logging
 import requests
-import os
 
 app = Flask(__name__)
 
-LINE_TOKEN = "GxKQCTE6XpBYDN9Z/WtWQVAR3WEkAwR/5eGIN2MXlfiXohV3BjxTYalySy2HBN7rLmyaTtMj/ONe+FUCZa3etR5aXqroXqGxyQUkPZ+9Kfwj7X/++HrngGIkT7/bWcKRQAionzH0QC/YByoEmW9rDgdB04t89/1O/w1cDnyilFU="
-USER_ID = "Ue428e46d6380ba97aaca7b234375bf3c"
+# ✅ 設定 logging 格式與等級
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
-# 儲存最近的 az 資料
-az_data = []
+# 🔐 LINE Notify 權杖
+LINE_TOKEN = "GxKQCTE6XpBYDN9Z/WtWQVAR3WEkAwR/5eGIN2MXlfiXohV3BjxTYalySy2HBN7rLmyaTtMj/ONe+FUCZa3etR5aXqroXqGxyQUkPZ+9Kfwj7X/++HrngGIkT7/bWcKRQAionzH0QC/YByoEmW9rDgdB04t89/1O/w1cDnyilFU="
+
+def send_line_notify(message):
+    url = "https://notify-api.line.me/api/notify"
+    headers = {
+        "Authorization": f"Bearer {LINE_TOKEN}"
+    }
+    payload = {"message": message}
+    r = requests.post(url, headers=headers, data=payload)
+    return r.status_code
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json()
-    az = data.get('az')
-    if az is None:
-        return jsonify({'status': 'error', 'message': 'No az value provided'}), 400
+    data = request.json
 
-    az_data.append(az)
-    if len(az_data) > 100:
-        az_data.pop(0)
+    # ✅ 原始 print：保留
+    print("📥 Received data:", data)
 
-    # 當資料量足夠時進行 FFT 分析
-    if len(az_data) == 100:
-        y = np.array(az_data)
-        y = y - np.mean(y)
-        N = len(y)
-        fs = 100  # 假設取樣頻率為 100 Hz
-        f = np.fft.rfftfreq(N, d=1/fs)
-        Y = np.fft.rfft(y)
-        amplitude = np.abs(Y)
+    # ✅ Logging 輸出
+    logging.info("📥 Received data: %s", data)
 
-        peak_idx = np.argmax(amplitude)
-        peak_freq = f[peak_idx]
-        peak_amp = amplitude[peak_idx]
+    # 只處理 az 資料
+    az_values = data.get('az', [])
+    if not az_values:
+        print("⚠️ No az data received.")
+        logging.warning("⚠️ No az data received.")
+        return jsonify({'status': 'no az data'}), 400
 
-        if peak_freq == 100 and peak_amp >= 5:
-            send_line_message(f"偵測到振動頻率為 {peak_freq} Hz，振幅為 {peak_amp:.2f}")
+    az_array = np.array(az_values)
 
-    return jsonify({'status': 'success'}), 200
+    # ✅ FFT 分析
+    fft_result = np.fft.fft(az_array)
+    fft_magnitude = np.abs(fft_result)
+    freq = np.fft.fftfreq(len(az_array), d=1/1000)  # 假設 1kHz 取樣率
 
-def send_line_message(message):
-    headers = {
-        "Authorization": f"Bearer {LINE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "to": USER_ID,
-        "messages": [{"type": "text", "text": message}]
-    }
-    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
-    return response.status_code
+    # ✅ 主頻分析
+    peak_index = np.argmax(fft_magnitude[1:]) + 1
+    peak_freq = abs(freq[peak_index])
+    peak_amplitude = fft_magnitude[peak_index]
 
-if __name__ == '__main__':
-    app.run()
+    print(f"📊 Peak frequency: {peak_freq:.2f} Hz, Amplitude: {peak_amplitude:.2f}")
+    logging.info("📊 Peak frequency: %.2f Hz, Amplitude: %.2f", peak_freq, peak_amplitude)
+
+    # ✅ 判斷是否觸發事件
+    if int(round(peak_freq)) == 100 and peak_amplitude >= 5:
+        message = f"🚨 偵測到異常震動！頻率：{peak_freq:.2f} Hz，振幅：{peak_amplitude:.2f}"
+        print("🔔 Sending LINE Notify:", message)
+        logging.info("🔔 Sending LINE Notify: %s", message)
+
+        response_code = send_line_notify(message)
+        return jsonify({'status': 'alert sent', 'code': response_code}), 200
+    else:
+        print("✅ 正常狀態，未觸發警報。")
+        logging.info("✅ Normal condition. No alert triggered.")
+        return jsonify({'status': 'normal'}), 200
+
+@app.route('/')
+def home():
+    return "LINE Notify Vibration Monitoring Server is running."
