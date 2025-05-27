@@ -8,12 +8,17 @@ logging.basicConfig(level=logging.INFO, format="🔍 %(asctime)s - %(message)s")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json()
-    az = data.get('az')
+    logging.info("✅ 收到 POST 請求")
+    try:
+        data = request.get_json(force=True)
+        logging.info(f"📝 原始 JSON：{data}")
+        az = data.get('az')
 
-    if az is not None:
-        logging.info(f"接收到 az 資料：{az}")
-    else:
-        logging.warning("⚠️ 未收到有效的 az 資料")
+        if az is not None:
+            logging.info(f"接收到 az 資料：{az}")
+        else:
+            logging.warning("⚠️ 未收到有效的 az 資料")
+    except Exception as e:
+        logging.error(f"❌ 發生錯誤：{e}")
 
     return jsonify({"status": "received"}), 200
