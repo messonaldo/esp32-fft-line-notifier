@@ -2,3 +2,4 @@ flask
 numpy
 requests
 gunicorn
+scipy
